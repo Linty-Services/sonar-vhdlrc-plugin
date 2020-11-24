@@ -46,6 +46,7 @@ public class VHDLRcPlugin implements Plugin {
       VhdlRulesDefinition.class,
       VhdlRcProfile.class,
       VhdlRcSensor.class,
+      YosysGhdlSensor.class,
       MetricSensor.class
         );
 	    builder.add(PropertyDefinition.builder(Vhdl.FILE_SUFFIXES_KEY)
