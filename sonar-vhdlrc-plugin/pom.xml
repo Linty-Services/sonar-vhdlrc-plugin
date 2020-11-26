@@ -5,12 +5,12 @@
   <parent>
     <groupId>org.sonarsource.parent</groupId>
     <artifactId>parent</artifactId>
-    <version>43</version>
+    <version>44</version>
   </parent>
   
   <groupId>com.linty.sonar</groupId>
   <artifactId>sonar-vhdlrc-plugin</artifactId>
-  <version>1.8.043</version>
+  <version>1.8.044</version>
   <packaging>sonar-plugin</packaging>
   <name>SonarQube VHDL Rulechecker Plugin</name>
    <organization>
