@@ -58,7 +58,7 @@ import org.xml.sax.SAXException;
 import static com.linty.sonar.params.ParamTranslator.*;
 
 public class ActiveRuleLoader {
-    
+
   private static final String NAME_SPACE  = "hb:";
   private static final String RULE        = "Rule";
   private static final String RULE_PARAMS = "RuleParams";
@@ -67,15 +67,20 @@ public class ActiveRuleLoader {
   private static final String VALUE_MIN   = "ValueMin";
   private static final String VALUE_MAX   = "ValueMax";
   private static final String UID = "UID";
-  private static final String REPO_KEY = VhdlRulesDefinition.VHDLRC_REPOSITORY_KEY;  
-  
+  private static final String REPO_KEY = VhdlRulesDefinition.VHDLRC_REPOSITORY_KEY;
+  private static boolean enableYosys=false;
+
   private Collection<ActiveRule> sonarActiveRules;
   private List<String> selectedRuleKeys;
   private Set<String> yosysRules;
   private final String ressource;
   private Document doc;
-  
+
   private static final Logger LOG = Loggers.get(ActiveRuleLoader.class);
+
+  public static boolean getEnableYosys() {
+    return enableYosys;  
+  }  
 
   public ActiveRuleLoader(ActiveRules activeRules, String ressource) {
     this.sonarActiveRules = activeRules.findByRepository(REPO_KEY);
@@ -99,34 +104,38 @@ public class ActiveRuleLoader {
     //Initiates the list of active rules to put in rc_selected_rules.xml later
     selectedRuleKeys = new ArrayList<>();
     yosysRules = new HandbookYosysRulesXmlParser().parseXML(getClass().getClassLoader().getResourceAsStream("configuration/HANDBOOK/Rulesets/handbook.xml"));
+    if(!enableYosys) // Execute yosys if at least one rule using yosys-ghdl is activated
+      for(ActiveRule activeRule : sonarActiveRules)
+        if(yosysRules.contains(activeRule.ruleKey().toString().substring(activeRule.ruleKey().toString().lastIndexOf(":") + 1)))
+          enableYosys=true;
     //Create a Temporary xml file with a random name
     Path target = Files.createTempFile("target",".xml");
     target.toFile().deleteOnExit();
-    
+
     // write the content into xml file
     DocumentBuilderFactory dbf = DocumentBuilderFactory
-      .newInstance();
+        .newInstance();
     dbf.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
     dbf.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
     dbf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
     this.doc = dbf
-      .newDocumentBuilder()
-      .parse(source);
-    
+        .newDocumentBuilder()
+        .parse(source);
+
     NodeList ruleNodes = doc.getElementsByTagName(hb(RULE));
-    
+
     for(int i = 0; i < ruleNodes.getLength(); i++) {
       treatRuleNode(ruleNodes.item(i));
     }
-    
+
     // write the content into xml file
     TransformerFactory tf = TransformerFactory
-    .newInstance();
+        .newInstance();
     tf.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
     tf.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
     tf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
     Transformer transfo = tf
-    .newTransformer();
+        .newTransformer();
 
     transfo.setOutputProperty(OutputKeys.INDENT, "yes");
     transfo.transform(new DOMSource(this.doc), new StreamResult(target.toFile()));
@@ -138,9 +147,9 @@ public class ActiveRuleLoader {
     String nodeUid = ruleNode.getAttributes().getNamedItem(UID).getNodeValue();
     //Try to get the matching rule of UID in sonar activeRules
     ActiveRule sonarRule = sonarActiveRules.stream()
-      .filter(r -> r.ruleKey().equals(RuleKey.of(REPO_KEY, nodeUid)))
-      .findFirst()
-      .orElse(null);
+        .filter(r -> r.ruleKey().equals(RuleKey.of(REPO_KEY, nodeUid)))
+        .findFirst()
+        .orElse(null);
     //If present
     if(sonarRule != null&&!yosysRules.contains(nodeUid)) {
       selectedRuleKeys.add(nodeUid); //Add it to the list of selected rules
@@ -148,7 +157,6 @@ public class ActiveRuleLoader {
         writeParam(ruleNode, sonarRule);
       }
     }
-    
   }
 
   private void writeParam(Node ruleNode, ActiveRule sonarRule) {
@@ -163,13 +171,13 @@ public class ActiveRuleLoader {
     }
     //Don't write anything if param is not type String, Int or Range
   }
-  
+
   //Receives <hb:RuleParams><> to fill
   private void writeStringParams(Node paramNode, ActiveRule sonarRule) {
-    
+
     // "*a,*b*,c" -> List{"*a" , "*b*" , "c"} each one leads to a param 
     List<String> ls = Stream.of(StringUtils.split(sonarRule.param(ZamiaStringParam.PARAM_KEY), ","))
-      .collect(Collectors.toList());
+        .collect(Collectors.toList());
     String position;
     String value;
     int i = 1;
@@ -179,7 +187,7 @@ public class ActiveRuleLoader {
       value = ParamTranslator.stringValueOf(s);
       //hb:StringParam
       Node strParamNode = paramNode.appendChild(this.doc.createElement(hb(STRING_PARAM)));
-      
+
       //hb:ParamID : P1, P2, P3, ..., P[i]
       strParamNode.appendChild(paramLine(hb(PARAM_ID), "P" + i++));    
       //hb:Relation
@@ -189,15 +197,15 @@ public class ActiveRuleLoader {
     }  
   }
 
-//Receives <hb:RuleParams><> to fill
+  //Receives <hb:RuleParams><> to fill
   private void writeIntParam(Node paramNode, ActiveRule sonarRule) {
 
     String relation = ParamTranslator.relationOf(sonarRule.param(ZamiaIntParam.RE_KEY));
     String value = sonarRule.param(ZamiaIntParam.LI_KEY);
-    
+
     //hb:IntParam
     Node intParamNode = paramNode.appendChild(this.doc.createElement(hb(INT_PARAM)));
-    
+
     //hb:ParamID
     intParamNode.appendChild(paramLine(hb(PARAM_ID), "P1"));    
     //hb:Relation
@@ -206,16 +214,16 @@ public class ActiveRuleLoader {
     intParamNode.appendChild(paramLine(hb(VALUE), value));
   }
 
-//Receives <hb:RuleParams><> to fill
+  //Receives <hb:RuleParams><> to fill
   private void writeRangeParam(Node paramNode, ActiveRule sonarRule) {
 
     String range = ParamTranslator.rangeOf(sonarRule.param(ZamiaRangeParam.RANGE_KEY));
     String valueMin = sonarRule.param(ZamiaRangeParam.MIN_KEY);
     String valueMax = sonarRule.param(ZamiaRangeParam.MAX_KEY);
-    
+
     //hb:RangeParam
     Node intParamNode = paramNode.appendChild(this.doc.createElement(hb(RANGE_PARAM)));
-    
+
     //hb:ParamID
     intParamNode.appendChild(paramLine(hb(PARAM_ID), "P1"));
     //hb:Range
@@ -225,7 +233,7 @@ public class ActiveRuleLoader {
     //hb:ValueMax
     intParamNode.appendChild(paramLine(hb(VALUE_MAX), valueMax));
   }
-  
+
   private Element paramLine(String element, String content) {
     Element e = doc.createElement(element);
     e.appendChild(doc.createTextNode(content));
@@ -264,9 +272,9 @@ public class ActiveRuleLoader {
       throw new IllegalStateException("activeRuleKeys() was called before makeRcHandbookParameters()");
     }
   }
-  
+
   public static String hb(String element) {
     return NAME_SPACE + element;
   }
-  
+
 }
